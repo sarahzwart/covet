@@ -16,7 +16,7 @@ Covet is a fashion price tracker. You paste a clothing product URL, pick your si
 ## Repository layout
 
 ```text
-frontend/   Next.js app (UI only; talks to the backend over JSON)
+frontend/   Next.js app (UI only; its server calls the backend over JSON)
 backend/    FastAPI app: API routes, services, retailer adapters, jobs
 database/   Alembic migrations
 ```
@@ -54,4 +54,19 @@ uvicorn app.main:app --reload --port 8000
 
 Run tests with `pytest`.
 
-_Database and frontend steps will be added as those pieces are wired up._
+### Frontend
+
+From `frontend/`:
+
+```powershell
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000>. The frontend currently runs on an **in-memory demo backend** (`lib/demo-backend.ts`). All products, prices and stock are sample data, labeled "Demo data" in the UI, and reset when the server restarts. It doesn't need the FastAPI server yet.
+
+To exercise error states in demo mode, paste an `abercrombie.com` URL whose path contains `not-found` or `unavailable`, or paste a URL from any other domain.
+
+Checks: `npx tsc --noEmit`, `npm run lint`, `npm run build`.
+
+_Database steps will be added once Supabase is wired up._

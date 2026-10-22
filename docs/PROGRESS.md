@@ -13,6 +13,13 @@ This file tracks where the project is and what comes next. Project rules live in
   - Centralized settings (`backend/app/config.py`)
   - CORS for the frontend
   - pytest with 2 passing tests
+- [x] **Frontend, built first on demo data.** All core screens work against an in-memory demo backend:
+  - `/`: tracked items list with grouping (All / By store / By type, kept in `?group=`), an SMS-alerts toggle, delete with confirmation, and badges for stock, target met, stale data and demo data. Includes an empty state.
+  - `/track`: paste a URL, preview the product (with loading and error states), pick a size (out-of-stock sizes allowed), set a target (any drop, a price, or percent off), choose a category, then start tracking.
+  - `/items/[id]`: product detail with the price history table, alerts toggle and delete.
+  - Error, loading and not-found pages. shadcn/ui uses the `base-nova` preset, which is built on Base UI.
+
+**How the frontend talks to data:** Server Components and Server Actions (`app/actions.ts`) call `lib/api.ts`, and `lib/api.ts` currently delegates to `lib/demo-backend.ts`. Wiring up the backend means replacing each `lib/api.ts` function body with a `fetch(`${API_URL}/api/...`)` call. The types in `frontend/types/index.ts` define the API contract the FastAPI schemas should match.
 
 **Next up: Step 2, database (Supabase).** Decided: use Supabase **as plain PostgreSQL only**. The backend connects with SQLAlchemy, Alembic owns the schema, and we don't use the Supabase JS client, Auth or Data API. There is no local Docker database.
 
@@ -45,17 +52,17 @@ Each step is small, runnable and tested before moving on.
 | 1 | Backend skeleton: FastAPI, settings, health check, pytest | ✅ |
 | 2 | Database: Supabase, SQLAlchemy models, Alembic migration, health check that verifies the database | ⏭ next |
 | 3 | Retailer interface, plus a demo adapter whose data is clearly labeled `is_demo`, plus domain validation | |
-| 4 | ⭐ **First useful feature: "Preview a product."** `POST /api/products/preview`. Frontend gets shadcn/ui init, a URL form and a product card with loading, error and "Demo data" states. | |
-| 5 | Track it: choose a size and target; list, toggle notifications, delete, group by retailer or category | |
+| 4 | ⭐ **First useful feature: "Preview a product."** `POST /api/products/preview`, then switch `lib/api.ts` `previewProduct` to call it | Frontend ✅ (demo data) |
+| 5 | Track it: tracked-items API (create, list, get, toggle notifications, delete), then switch the remaining `lib/api.ts` functions to it | Frontend ✅ (demo data) |
 | 6 | Real Abercrombie adapter (needs the data-source decision below) | |
-| 7 | Scheduler job, price history and "last checked / stale" badges | |
+| 7 | Scheduler job and price history recording (UI for history and staleness already exists) | |
 | 8 | Notification eligibility rules, console notifier, then Twilio (confirm cost first) | |
 | 9 | Later: more retailers, accounts and phone verification, AI features only if justified | |
 
 ## Architecture summary
 
 ```
-Browser ──> Next.js (RSC + client forms) ──fetch JSON──> FastAPI (/api/...)
+Browser ──> Next.js (RSC + Server Actions ─> lib/api.ts) ──fetch JSON──> FastAPI (/api/...)
                                                         │
                     api/ (thin routes) ─> services/ (tracking logic)
                                                         │           │
@@ -64,7 +71,7 @@ Browser ──> Next.js (RSC + client forms) ──fetch JSON──> FastAPI (/a
               jobs/ (scheduler process) ─ uses the same services ─> notifications (Twilio)
 ```
 
-- **Frontend:** UI only, with no secrets. All HTTP calls go through `lib/api.ts`.
+- **Frontend:** UI only, with no secrets. All backend calls go through `lib/api.ts`, which runs only on the server (Server Components and Server Actions). The backend URL is the server-only `API_URL`.
 - **`api/`:** validates requests with Pydantic, calls a service and returns a schema. It contains no business logic.
 - **`services/`:** deterministic tracking rules, unit-tested.
 - **`retailers/`:** a `RetailerAdapter` protocol with `supports(url)` and `fetch_product(url) -> ProductSnapshot`. Size availability is `in_stock | out_of_stock | unknown`. Only allowed domains are accepted, to prevent SSRF.
@@ -83,6 +90,9 @@ Browser ──> Next.js (RSC + client forms) ──fetch JSON──> FastAPI (/a
   - no notification has been sent for this event yet
 
 ## Open questions and risks
+
+- **Phone number for SMS:** the UI doesn't collect one yet. That needs a settings page or accounts, plus phone verification, before Twilio goes live.
+- **Frontend tests:** there are no frontend unit tests yet; changes are checked with `tsc`, ESLint and `next build`. If the frontend logic grows, consider adding Vitest for `lib/tracking.ts` and `lib/retailers.ts`.
 
 - **Abercrombie data source (the main risk).** There is no known public API. The options to evaluate before step 6:
   - Structured data on product pages: price is likely available, but size-level stock often isn't. Requires reviewing the Terms of Use and robots.txt.
